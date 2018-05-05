@@ -30,12 +30,12 @@ namespace POP3
         static void Main(string[] args)
         {
             Console.WriteLine("Enter your account mail.ru");
-            //var account = Console.ReadLine();
-            var account = "test.martyanovst@mail.ru";
+            var account = Console.ReadLine();
+            //var account = "test.martyanovst@mail.ru";
 
             Console.WriteLine($"Enter password from {account}");
-            //var password = Console.ReadLine();
-            var password = "afhfjyt,fyysqgcb[";
+            var password = Console.ReadLine();
+            //var password = "afhfjyt,fyysqgcb[";
 
 
             var buffer = new byte[1024];
@@ -49,13 +49,13 @@ namespace POP3
                 var countOfMessages = ReadStat(sslStream);
                 Console.WriteLine($"You have {countOfMessages} messages");
                 Console.WriteLine("Select message number, which you want to see");
-                //var messageNumber = int.Parse(Console.ReadLine());
-                var messageNumber = 7;
+                var messageNumber = int.Parse(Console.ReadLine());
+                //var messageNumber = 7;
                 if (messageNumber < 1 || messageNumber > countOfMessages)
                     throw new ArgumentException($"Number must be more than zero and less than {countOfMessages + 1}");
                 Console.WriteLine($"Select what you want to do with message:\n{CommandsHelp}");
-                //var command = ReadCommand();
-                var command = (command: "DOWNLOAD", args: new[] { @"C:\Users\Comp\Desktop\Игры\С#\SMTP" });
+                var command = ReadCommand();
+                //var command = (command: "DOWNLOAD", args: new[] { @"C:\Users\Comp\Desktop\Игры\С#\SMTP" });
                 Console.WriteLine(CommandExecute(command.command, command.args, messageNumber, sslStream));
                 sslStream.Write(charset.GetBytes("QUIT"));
             }
