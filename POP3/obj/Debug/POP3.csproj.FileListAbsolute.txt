@@ -1,0 +1,7 @@
+c:\users\comp\documents\visual studio 2017\Projects\POP3\POP3\bin\Debug\POP3.exe.config
+c:\users\comp\documents\visual studio 2017\Projects\POP3\POP3\bin\Debug\POP3.exe
+c:\users\comp\documents\visual studio 2017\Projects\POP3\POP3\bin\Debug\POP3.pdb
+c:\users\comp\documents\visual studio 2017\Projects\POP3\POP3\obj\Debug\POP3.csprojResolveAssemblyReference.cache
+c:\users\comp\documents\visual studio 2017\Projects\POP3\POP3\obj\Debug\POP3.exe
+c:\users\comp\documents\visual studio 2017\Projects\POP3\POP3\obj\Debug\POP3.pdb
+c:\users\comp\documents\visual studio 2017\Projects\POP3\POP3\bin\Debug\System.ValueTuple.dll
