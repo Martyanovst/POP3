@@ -1,13 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
-using System.Runtime.Remoting;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -30,12 +27,12 @@ namespace POP3
         static void Main(string[] args)
         {
             Console.WriteLine("Enter your account mail.ru");
-            var account = Console.ReadLine();
-            //var account = "test.martyanovst@mail.ru";
+            //var account = Console.ReadLine();
+            var account = "test.martyanovst@mail.ru";
 
             Console.WriteLine($"Enter password from {account}");
-            var password = Console.ReadLine();
-            //var password = "afhfjyt,fyysqgcb[";
+            //var password = Console.ReadLine();
+            var password = "afhfjyt,fyysqgcb[";
 
 
             var buffer = new byte[1024];
@@ -49,13 +46,13 @@ namespace POP3
                 var countOfMessages = ReadStat(sslStream);
                 Console.WriteLine($"You have {countOfMessages} messages");
                 Console.WriteLine("Select message number, which you want to see");
-                var messageNumber = int.Parse(Console.ReadLine());
-                //var messageNumber = 7;
+                //var messageNumber = int.Parse(Console.ReadLine());
+                var messageNumber = 6;
                 if (messageNumber < 1 || messageNumber > countOfMessages)
                     throw new ArgumentException($"Number must be more than zero and less than {countOfMessages + 1}");
                 Console.WriteLine($"Select what you want to do with message:\n{CommandsHelp}");
-                var command = ReadCommand();
-                //var command = (command: "DOWNLOAD", args: new[] { @"C:\Users\Comp\Desktop\Игры\С#\SMTP" });
+                //var command = ReadCommand();
+                var command = (command: "DOWNLOAD", args: new[] { @"C:\Users\Comp\Desktop\Игры\С#\SMTP" });
                 Console.WriteLine(CommandExecute(command.command, command.args, messageNumber, sslStream));
                 sslStream.Write(charset.GetBytes("QUIT"));
             }
@@ -92,11 +89,11 @@ namespace POP3
 
                 case "TOP":
                     stream.Write(charset.GetBytes($"RETR {messageNumber}\r\n"));
-                    var MessageData = ReadBuffer(stream, data.Length);
+                    var MessageData = ReadBuffer(stream);
                     return ParseHeadings(MessageData) + ReadLines(MessageData, int.Parse(args[0]));
                 case "DOWNLOAD":
                     stream.Write(charset.GetBytes($"RETR {messageNumber}\r\n"));
-                    MessageData = ReadBuffer(stream,data.Length);
+                    MessageData = ReadBuffer(stream);
                     return SaveMessageToDirectory(MessageData, args[0]);
             }
             return charset.GetString(data);
@@ -105,23 +102,24 @@ namespace POP3
         static string SaveMessageToDirectory(string message, string path)
         {
             var boundary = GetBoundary(message);
+            Console.WriteLine(message);
             var text = ReadAllTextFromMessage(message, boundary, out var encoding);
             try
             {
-            System.IO.File.WriteAllText(Path.Combine(path, "text.txt"), text, encoding);
-            foreach (var file in GetContent(message, boundary))
-            {
-                using (var ms = new MemoryStream(file.Bytes))
+                System.IO.File.WriteAllText(Path.Combine(path, "text.txt"), text, encoding);
+                foreach (var file in GetContent(message, boundary))
                 {
-                    var image = Image.FromStream(ms);
-                    image.Save(Path.Combine(path, file.Name));
-                    Console.WriteLine($"Save image {file.Name} to directory: {path}");
+                    using (var ms = new MemoryStream(file.Bytes))
+                    {
+                        var image = Image.FromStream(ms);
+                        image.Save(Path.Combine(path, file.Name));
+                        Console.WriteLine($"Save image {file.Name} to directory: {path}");
+                    }
                 }
-            }
 
             }
             catch (Exception)
-           {
+            {
                 return "FAILURE!";
             }
 
@@ -240,8 +238,9 @@ namespace POP3
                 str = charset.GetString(data);
                 builder.Append(str);
             } while (str.IndexOf("\n.\r", StringComparison.Ordinal) == -1);
-            return builder.ToString();
+            return new Regex("\n.\r").Split(builder.ToString())[0];
         }
+
         static string ReadBuffer(Stream stream, int count)
         {
             var buffer = new List<byte>();
@@ -250,6 +249,7 @@ namespace POP3
 
             return charset.GetString(buffer.ToArray());
         }
+
         static int ReadStat(SslStream stream)
         {
             stream.Write(charset.GetBytes("STAT\r\n"));
