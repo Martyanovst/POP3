@@ -24,6 +24,8 @@ namespace POP3
         private static readonly string[] ImportantHeadings = { "From", "Date", "Subject" };
         private static Dictionary<int, int> MsgSizes = new Dictionary<int, int>();
         private static readonly Regex boundaryRegex = new Regex("boundary=\"(.+?)\"");
+        private static int fileCounter = 1;
+
         static void Main(string[] args)
         {
             Console.WriteLine("Enter your account mail.ru");
@@ -52,6 +54,8 @@ namespace POP3
                     throw new ArgumentException($"Number must be more than zero and less than {countOfMessages + 1}");
                 Console.WriteLine($"Select what you want to do with message:\n{CommandsHelp}");
                 //var command = ReadCommand();
+                //var command = (command: "TOP", args: new[] { "10" });
+
                 var command = (command: "DOWNLOAD", args: new[] { @"C:\Users\Comp\Desktop\Игры\С#\SMTP" });
                 Console.WriteLine(CommandExecute(command.command, command.args, messageNumber, sslStream));
                 sslStream.Write(charset.GetBytes("QUIT"));
@@ -101,21 +105,19 @@ namespace POP3
 
         static string SaveMessageToDirectory(string message, string path)
         {
-            var boundary = GetBoundary(message);
-            Console.WriteLine(message);
-            var text = ReadAllTextFromMessage(message, boundary, out var encoding);
+            var text = ReadAllTextFromMessage(message);
             try
             {
-                System.IO.File.WriteAllText(Path.Combine(path, "text.txt"), text, encoding);
-                foreach (var file in GetContent(message, boundary))
+            System.IO.File.WriteAllText(Path.Combine(path, "text.txt"), text, charset);
+            foreach (var file in GetContent(message))
+            {
+                using (var ms = new MemoryStream(file.Bytes))
                 {
-                    using (var ms = new MemoryStream(file.Bytes))
-                    {
-                        var image = Image.FromStream(ms);
-                        image.Save(Path.Combine(path, file.Name));
-                        Console.WriteLine($"Save image {file.Name} to directory: {path}");
-                    }
+                    var image = Image.FromStream(ms);
+                    image.Save(Path.Combine(path, file.Name));
+                    Console.WriteLine($"Save image {file.Name} to directory: {path}");
                 }
+            }
 
             }
             catch (Exception)
@@ -155,66 +157,102 @@ namespace POP3
             return builder.ToString();
         }
 
-        static IEnumerable<File> GetContent(string message, string boundary)
+        static List<File> GetContent(string message)
         {
+            var boundary = GetBoundary(message);
             var splitter = new Regex(boundary, RegexOptions.Compiled);
-            var extensionPattern = new Regex("Content-Type: image/(.+?);", RegexOptions.Compiled);
-            var namePattern = new Regex("name=\"(.+?)\"", RegexOptions.Compiled);
-            var splitedByNewLineSymbol = new Regex("\r\n\r\n", RegexOptions.Compiled);
-            var splittedByBoundaryLines = splitter.Split(message).ToArray();
-            foreach (var dataBlock in splittedByBoundaryLines)
+            var headings = GetHeadings(message);
+            string[] splittedByBoundaryLines;
+            if (boundary != "--")
+                splittedByBoundaryLines = splitter.Split(message)
+                    .Where(x => !string.IsNullOrWhiteSpace(x) && !string.IsNullOrEmpty(x))
+                    .Skip(1)
+                    .ToArray();
+            else
+                splittedByBoundaryLines = new string[0];
+            var files = new List<File>();
+            if (splittedByBoundaryLines.Length > 1)
+                foreach (var text in splittedByBoundaryLines)
+                {
+                    var content = GetContent(text);
+                    if (content != null)
+                        files.AddRange(content);
+                }
+            else
             {
-                var splited = splitedByNewLineSymbol.Split(dataBlock).Where(x => !string.IsNullOrEmpty(x)).ToArray();
-                if (!extensionPattern.IsMatch(splited[0])) continue;
-                var extension = extensionPattern.Match(splited[0]).Groups[1].Value;
-                var name = ReadBase64(namePattern.Match(splited[0]).Groups[1].Value);
-                if (splited.Length < 2) continue;
-                var index = splited[1].IndexOf("--", StringComparison.Ordinal);
-                var attachment = index >= 0 ? splited[1].Substring(0, index) : splited[1];
-                if (string.IsNullOrEmpty(attachment)) continue;
-                var bytes = Convert.FromBase64String(attachment);
-                yield return new File(name, extension, bytes);
+                splittedByBoundaryLines = new Regex("\r\n\r\n").Split(message).Skip(1).Where(x => !string.IsNullOrEmpty(x)).ToArray();
+                if (!headings.ContainsKey("Content-Type") || !headings["Content-Type"].Contains("image/"))
+                    return null;
+                var extensionPattern = new Regex("image/(.+?);", RegexOptions.Singleline);
+                var namePattern = new Regex("name=\"(.+?)\"", RegexOptions.Singleline);
+                var extension = extensionPattern.IsMatch(headings["Content-Type"]) ? ReadBase64(extensionPattern.Match(headings["Content-Type"]).Groups[1].Value) : fileCounter++.ToString();
+                
+                var name = headings.ContainsKey("Content-Type") && namePattern.IsMatch(headings["Content-Type"]) 
+                    ? ReadBase64(namePattern.Match(headings["Content-Type"]).Groups[1].Value) 
+                    : $"{fileCounter++}.bmp";
+                var index = splittedByBoundaryLines[0].IndexOf("--", StringComparison.Ordinal);
+                var attachment = index >= 0 ? splittedByBoundaryLines[0].Substring(0, index) : splittedByBoundaryLines[0];
+                if (string.IsNullOrEmpty(attachment)) return null;
+                var bytes = Convert.FromBase64String(attachment.Trim());
+                files.Add(new File(name, extension, bytes));
             }
+            return files;
         }
 
-        static string ReadAllTextFromMessage(string message, string boundary, out Encoding charset)
+        static string ReadAllTextFromMessage(string message)
         {
+            var boundary = GetBoundary(message);
             var splitter = new Regex(boundary, RegexOptions.Compiled);
-            var charsetPattern = new Regex("charset=\"(.+?)\"");
-            var splittedByBoundaryLines = splitter.Split(message).Where(x => x.Contains("Content-Type: text/plain")).ToArray();
-            charset = Program.charset;
-            if (splittedByBoundaryLines.Length == 0) return "";
+            var headings = GetHeadings(message);
+            string[] splittedByBoundaryLines;
+            if (boundary != "--")
+                splittedByBoundaryLines = splitter.Split(message)
+                   .Where(x => !string.IsNullOrWhiteSpace(x) && !string.IsNullOrEmpty(x))
+                   .Skip(1)
+                   .ToArray();
+            else
+                splittedByBoundaryLines = new string[0];
             var builder = new StringBuilder();
-            foreach (var line in splittedByBoundaryLines)
+            if (splittedByBoundaryLines.Length > 1)
+                foreach (var text in splittedByBoundaryLines)
+                    builder.Append(ReadAllTextFromMessage(text));
+            else
             {
-                var splitedByNewLineSymbol = new Regex("\r\n\r\n").Split(line);
-                for (var i = 0; i < splitedByNewLineSymbol.Length; i++)
-                {
-                    if (charsetPattern.IsMatch(splitedByNewLineSymbol[i]))
-                    {
-                        var encodingName = charsetPattern.Match(line).Groups[1].Value;
-                        if (!string.IsNullOrEmpty(encodingName))
-                            charset = Encoding.GetEncoding(encodingName);
-                        builder.Append(splitedByNewLineSymbol[i + 1]);
-                        break;
-                    }
-                }
+                splittedByBoundaryLines = new Regex("\r\n\r\n").Split(message).Skip(1).Where(x => !string.IsNullOrEmpty(x)).ToArray();
+                if (!headings.ContainsKey("Content-Type") || !headings["Content-Type"].Contains("text/"))
+                    return "";
+                var charsetPattern = new Regex("charset=\"(.+?)\"",RegexOptions.Singleline);
+                var contentType = headings["Content-Type"];
+                var encoding = charsetPattern.IsMatch(contentType)
+                    ? Encoding.GetEncoding(charsetPattern.Match(headings["Content-Type"]).Groups[1].Value)
+                    : Encoding.UTF8;
+                foreach (var line in splittedByBoundaryLines)
+                    builder.Append(charset.GetString(encoding.GetBytes(line)));
             }
+            builder.Append("\r\n");
             return builder.ToString();
+        }
+
+        private static Dictionary<string, string> GetHeadings(string message)
+        {
+            var headingsData = new Regex("\r\n\r\n").Split(message)[0];
+            var headings = new Regex("(.+?:.+?)\r\n")
+                .Split(headingsData)
+                .Select(x => x.Trim())
+                .Where(x => !string.IsNullOrEmpty(x))
+                .Select(x => x.Split(':'))
+                .Where(x => x.Length > 1)
+                .ToArray();
+            var result = new Dictionary<string, string>();
+            foreach (var heading in headings)
+                if(!result.ContainsKey(heading[0]))
+                result[heading[0]] = heading[1];
+            return result;
         }
 
         static string ReadLines(string message, int count)
         {
-            var boundary = GetBoundary(message);
-            var text = ReadAllTextFromMessage(message, boundary, out var encoding);
-            try
-            {
-                text = encoding.GetString(Convert.FromBase64String(text));
-            }
-            catch
-            {
-                // ignored
-            }
+            var text = ReadAllTextFromMessage(message);
             var lines = text.Split('\n').Take(count);
             var builder = new StringBuilder();
             foreach (var line in lines)
@@ -238,7 +276,7 @@ namespace POP3
                 str = charset.GetString(data);
                 builder.Append(str);
             } while (str.IndexOf("\n.\r", StringComparison.Ordinal) == -1);
-            return new Regex("\n.\r").Split(builder.ToString())[0];
+            return new Regex("\r\n\\.\r\n",RegexOptions.Singleline).Split(builder.ToString())[0];
         }
 
         static string ReadBuffer(Stream stream, int count)
