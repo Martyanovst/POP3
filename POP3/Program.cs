@@ -34,7 +34,7 @@ namespace POP3
 
             Console.WriteLine($"Enter password from {account}");
             //var password = Console.ReadLine();
-            var password = "afhfjyt,fyysqgcb[";
+            var password = "qwerty123456";
 
 
             var buffer = new byte[1024];
@@ -92,7 +92,7 @@ namespace POP3
                     return ParseHeadings(ReadBuffer(stream, data.Length));
 
                 case "TOP":
-                    stream.Write(charset.GetBytes($"RETR {messageNumber}\r\n"));
+                    stream.Write(charset.GetBytes($"TOP {messageNumber} args[0]\r\n"));
                     var MessageData = ReadBuffer(stream);
                     return ParseHeadings(MessageData) + ReadLines(MessageData, int.Parse(args[0]));
                 case "DOWNLOAD":
